@@ -1,0 +1,36 @@
+name: Test data update
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Write test data
+        run: |
+          cat > data.json <<'EOF'
+          {"ts":"TEST","d":{"a":1,"b":2}}
+          EOF
+
+      - name: Commit changes
+        run: |
+          git config user.name "sync"
+          git config user.email "sync@localhost"
+
+          git add data.json
+
+          if git diff --cached --quiet; then
+            echo "NO CHANGE"
+            exit 0
+          fi
+
+          git commit -m "Test Actions update"
+          git push
