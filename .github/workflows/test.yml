@@ -2,6 +2,8 @@ name: Test data
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '10 7 * * 1-5'
 
 permissions:
   contents: write
