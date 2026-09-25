@@ -1,4 +1,4 @@
-name: Test data update
+name: Test market data
 
 on:
   workflow_dispatch:
@@ -7,20 +7,124 @@ permissions:
   contents: write
 
 jobs:
-  test:
+  update:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Write test data
+      - name: Get market data
+        shell: bash
         run: |
-          cat > data.json <<'EOF'
-          {"ts":"TEST","d":{"a":1,"b":2}}
-          EOF
+          set -euo pipefail
 
-      - name: Commit changes
+          BASE='https://jq.profinance.ru/html/htmlquotes'
+          TMP=$(mktemp -d)
+          trap 'rm -rf "$TMP"' EXIT
+
+          echo "Getting session..."
+
+          curl -sS -L \
+            -c "$TMP/cookies" \
+            "$BASE/site.jsp" \
+            -o "$TMP/site.jsp"
+
+          SID=$(grep -oE 'SID=[^"&;]+' "$TMP/site.jsp" \
+            | head -1 \
+            | cut -d= -f2)
+
+          if [ -z "$SID" ]; then
+            echo "ERROR: SID not found"
+            exit 1
+          fi
+
+          echo "SID received"
+
+          payload="1;SID=$SID;LP=;NCHL=;NCHPL=;S=DJIA;S=SPX;S=NASD100;S=FTSE100;S=DAX;S=CAC40;S=MMVB;S=RTST;S=USD_INDEX;S=594;
+          1;SID=$SID;LP=;NCHL=;NCHPL=;S=528;S=529;S=530;S=532;S=533;S=534;S=535;S=536;S=605
+          1;SID=$SID;LP=;NCHL=;NCHPL=;S=Gold;S=Silver;S=Platinum;S=Palladium;S=Aluminum;S=Copper;S=Nickel;S=Brent oil;S=WTI oil;S=Gas US;S=TTF USD1000;S=Urals Med"
+
+          echo "Requesting quotes..."
+
+          curl -sS -L \
+            -b "$TMP/cookies" \
+            -c "$TMP/cookies" \
+            -H 'Content-Type: text/plain;charset=UTF-8' \
+            --data-binary "$payload"$'\n' \
+            "$BASE/q" \
+            -o "$TMP/result"
+
+          echo "Parsing..."
+
+          awk -F';' '
+          function clean(v) {
+              sub(/^[+-]/, "", v)
+              return v
+          }
+
+          {
+              symbol=""
+              price=""
+              t=""
+
+              for (i=1; i<=NF; i++) {
+                  if ($i ~ /^S=/) symbol=substr($i,3)
+                  if ($i ~ /^LP=/) price=substr($i,4)
+                  if ($i ~ /^T=/)  t=substr($i,3)
+              }
+
+              if (t != "")
+                  ts=t
+
+              if (price == "")
+                  next
+
+              price=clean(price)
+
+              if      (symbol == "Brent oil")        v["a"]=price
+              else if (symbol == "WTI oil")          v["b"]=price
+              else if (symbol == "Urals Med")        v["c"]=price
+              else if (symbol == "TTF USD1000")      v["d"]=price
+              else if (symbol == "Gold")             v["e"]=price
+              else if (symbol == "MMVB")             v["f"]=price
+              else if (symbol == "RTST")             v["g"]=price
+              else if (symbol == "DJIA")             v["h"]=price
+              else if (symbol == "SP500" || symbol == "SPX") v["i"]=price
+              else if (symbol == "NASD100")          v["j"]=price
+              else if (symbol == "FTSE100")          v["k"]=price
+              else if (symbol == "DAX")              v["l"]=price
+              else if (symbol == "CAC40")            v["m"]=price
+          }
+
+          END {
+              printf "{\"ts\":\"%s\",\"d\":{", ts
+              printf "\"a\":%s,", (v["a"] != "" ? v["a"] : "null")
+              printf "\"b\":%s,", (v["b"] != "" ? v["b"] : "null")
+              printf "\"c\":%s,", (v["c"] != "" ? v["c"] : "null")
+              printf "\"d\":%s,", (v["d"] != "" ? v["d"] : "null")
+              printf "\"e\":%s,", (v["e"] != "" ? v["e"] : "null")
+              printf "\"f\":%s,", (v["f"] != "" ? v["f"] : "null")
+              printf "\"g\":%s,", (v["g"] != "" ? v["g"] : "null")
+              printf "\"h\":%s,", (v["h"] != "" ? v["h"] : "null")
+              printf "\"i\":%s,", (v["i"] != "" ? v["i"] : "null")
+              printf "\"j\":%s,", (v["j"] != "" ? v["j"] : "null")
+              printf "\"k\":%s,", (v["k"] != "" ? v["k"] : "null")
+              printf "\"l\":%s,", (v["l"] != "" ? v["l"] : "null")
+              printf "\"m\":%s",  (v["m"] != "" ? v["m"] : "null")
+              printf "}}\n"
+          }
+          ' "$TMP/result" > data.json
+
+          echo "Result:"
+          cat data.json
+
+          if grep -q ':null' data.json; then
+            echo "ERROR: incomplete data"
+            exit 1
+          fi
+
+      - name: Commit data
         run: |
           git config user.name "sync"
           git config user.email "sync@localhost"
@@ -32,5 +136,5 @@ jobs:
             exit 0
           fi
 
-          git commit -m "Test Actions update"
+          git commit -m "Update market data"
           git push
