@@ -116,12 +116,12 @@ jobs:
               printf "\"m\":%s",  (v["m"] != "" ? v["m"] : "null")
               printf "}}\n"
           }
-          ' "$TMP/result" > data.json
+          ' "$TMP/result" > data_sched.json
 
           echo "Result:"
-          cat data.json
+          cat data_sched.json
 
-          if grep -q ':null' data.json; then
+          if grep -q ':null' data_sched.json; then
             echo "ERROR: incomplete data"
             exit 1
           fi
@@ -131,7 +131,7 @@ jobs:
           git config user.name "sync"
           git config user.email "sync@localhost"
 
-          git add data.json
+          git add data_sched.json
 
           if git diff --cached --quiet; then
             echo "NO CHANGE"
