@@ -150,7 +150,7 @@ jobs:
           git config user.name "sync"
           git config user.email "sync@localhost"
 
-          git add data.json
+          git add data.json history.json
 
           if git diff --cached --quiet; then
             echo "NO CHANGE"
