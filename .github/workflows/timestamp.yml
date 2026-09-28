@@ -10,10 +10,10 @@ permissions:
 
 jobs:
   write-date:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: uses: actions/checkout@v5
+        uses: actions/checkout@v5
 
       - name: Write date and time to file
         run: |
